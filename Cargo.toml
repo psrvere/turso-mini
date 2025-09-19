@@ -1,0 +1,15 @@
+[workspace]
+members = [
+    "core",
+]
+
+[workspace.package]
+name = "turso-mini"
+version = "0.1.0"
+edition = "2021"
+authors = ["Prateek Singh Rathore <prateek.singh.rathore@gmail.com"]
+description = "Internals of Turso DB"
+license = "MIT"
+
+[workspace.dependencies]
+bitflags="2.0"
