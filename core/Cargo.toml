@@ -12,3 +12,4 @@ path = "mod.rs"
 
 [dependencies]
 bitflags.workspace = true
+thiserror = "2.0.16"
