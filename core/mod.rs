@@ -11,6 +11,28 @@ pub mod buffer;
 pub mod error;
 pub mod clock;
 
+pub type Result<T, E = TursoMiniError> = std::result::Result<T, E>;
+
+pub trait File: Send + Sync {
+    fn lock_file(&self, exclusive: bool) -> Result<()>;
+    fn unlock_file(&self) -> Result<()>;
+    fn pread(&self, pos: u64, c: Completion) -> Result<Completion>;
+    fn pwrite(&self, pos: u64, buffer: Arc<Buffer>, c: Completion) -> Result<Completion>;
+    fn sync(&self, c: Completion) -> Result<Completion>;
+    fn truncate(&self, len: u64, c: Completion) -> Result<Completion>;
+    fn size(&self) -> Result<u64>;
+    fn pwritev(&self, pos: u64, buffers: Vec<Arc<Buffer>>, c: Completion) -> Result<Completion>;
+}
+
+pub trait IO: Clock + Send + Sync {
+    fn open_file(&self, path: &str, flags: OpenFlags) -> Result<Arc<dyn File>>;
+    fn remove_file(&self, path: &str) -> Result<()>;
+    fn step(&self) -> Result<()>;
+    fn cancel(&self, c: &[Completion]) -> Result<()>;
+    fn drain(&self) -> Result<()>;
+    fn wait_for_completion(&self, c: Completion) -> Result<()>;
+}
+
 #[derive(Debug, PartialEq)]
 pub struct OpenFlags(i32);
 
@@ -27,8 +49,6 @@ impl Default for OpenFlags {
         Self::Create
     }
 }
-
-pub type Result<T, E = TursoMiniError> = std::result::Result<T, E>;
 
 pub type ReadComplete = dyn Fn(Result<(Arc<Buffer>, i32), CompletionError>);
 pub type WriteComplete = dyn Fn(Result<i32, CompletionError>);
