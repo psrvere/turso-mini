@@ -1,8 +1,9 @@
 use std::pin::Pin;
 use std::fmt;
 
+pub type BufferData = Pin<Box<[u8]>>;
 pub enum Buffer {
-    Heap(Pin<Box<[u8]>>)
+    Heap(BufferData)
 }
 
 impl Buffer {
@@ -68,3 +69,11 @@ impl fmt::Debug for Buffer {
         }
     }
 }
+
+// Rust will handle cleanup automatically
+// The Arc<Buffer> will automatically deallocates when ref counts reaches 0
+// So let's not implement Drop trait for now
+// impl Drop for Buffer {
+//     fn drop(&mut self) {
+//     }
+// }
