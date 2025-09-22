@@ -1,4 +1,9 @@
 use bitflags::bitflags;
+use clock::Clock;
+use error::TursoMiniError;
+use std::sync::Arc;
+use buffer::Buffer;
+use error::CompletionError;
 
 pub mod buffer;
 pub mod error;
@@ -21,6 +26,76 @@ impl Default for OpenFlags {
     }
 }
 
+pub type Result<T, E = TursoMiniError> = std::result::Result<T, E>;
+
+pub type ReadComplete = dyn Fn(Result<(Arc<Buffer>, i32), CompletionError>);
+pub type WriteComplete = dyn Fn(Result<i32, CompletionError>);
+pub type SyncComplete = dyn Fn(Result<i32, CompletionError>);
+pub type TruncateComplete = dyn Fn(Result<i32, CompletionError>);
+
+pub struct ReadCompletion {
+    pub buf: Arc<Buffer>,
+    pub complete: Box<ReadComplete>,
+}
+
+impl ReadCompletion {
+    pub fn new(buf: Arc<Buffer>, complete: Box<ReadComplete>) -> Self {
+        Self {buf, complete}
+    }
+
+    pub fn callback(&self, bytes_read: Result<i32, CompletionError>) {
+        (self.complete)(bytes_read.map(|b| (self.buf.clone(), b)));
+    }
+}
+
+pub struct WriteCompletion {
+    pub complete: Box<WriteComplete>,
+}
+
+impl WriteCompletion {
+    pub fn new(complete: Box<WriteComplete>) -> Self {
+        Self { complete }
+    }
+
+    pub fn callback(&self, bytes_written: Result<i32, CompletionError>) {
+        (self.complete)(bytes_written);
+    }
+}
+
+pub struct SyncCompletion {
+    pub complete: Box<SyncComplete>,
+}
+
+impl SyncCompletion {
+    pub fn new(complete: Box<SyncComplete>) -> Self {
+        Self { complete }
+    }
+
+    pub fn callback(&self, res: Result<i32, CompletionError>) {
+        (self.complete)(res);
+    }
+}
+
+pub struct TruncateCompletion {
+    pub complete: Box<TruncateComplete>,
+}
+
+impl TruncateCompletion {
+    pub fn new(complete: Box<TruncateComplete>) -> Self{
+        Self { complete }
+    }
+
+    pub fn callback(&self, res: Result<i32, CompletionError>) {
+        (self.complete)(res)
+    }
+}
+
+pub enum CompletionType {
+    Read(ReadCompletion),
+    Write(WriteCompletion),
+    Sync(SyncCompletion),
+    Truncate(TruncateCompletion),
+}
 #[cfg(test)]
 mod tests {
     use super::OpenFlags;
