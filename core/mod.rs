@@ -10,11 +10,12 @@ use std::fmt::Debug;
 pub mod buffer;
 pub mod error;
 pub mod clock;
+pub mod memory;
 
 pub type Result<T, E = TursoMiniError> = std::result::Result<T, E>;
 
 pub trait File: Send + Sync {
-    fn lock_file(&self, exclusive: bool) -> Result<()>;
+    fn lock_file(&self) -> Result<()>;
     fn unlock_file(&self) -> Result<()>;
     fn pread(&self, pos: u64, c: Completion) -> Result<Completion>;
     fn pwrite(&self, pos: u64, buffer: Arc<Buffer>, c: Completion) -> Result<Completion>;
@@ -67,6 +68,10 @@ impl ReadCompletion {
 
     pub fn callback(&self, bytes_read: Result<i32, CompletionError>) {
         (self.complete)(bytes_read.map(|b| (self.buf.clone(), b)));
+    }
+
+    pub fn buf(&self) -> &Buffer {
+        &self.buf
     }
 }
 
@@ -196,6 +201,45 @@ impl Completion {
         Self::new(CompletionType::Truncate(TruncateCompletion::new(
             Box::new(complete),
         )))
+    }
+
+    pub fn complete(&self, result: i32) {
+        let result = Ok(result);
+        match &self.inner.completion_type {
+            CompletionType::Read(r) => r.callback(result),
+            CompletionType::Write(w) => w.callback(result),
+            CompletionType::Sync(s) => s.callback(result),
+            CompletionType::Truncate(t) => t.callback(result),
+        }
+        self.inner.result.set(None).expect("result must be set only once");
+    }
+
+    pub fn error(&self, err: CompletionError) {
+        let result = Err(err);
+        match &self.inner.completion_type {
+            CompletionType::Read(r) => r.callback(result),
+            CompletionType::Write(w) => w.callback(result),
+            CompletionType::Sync(s) => s.callback(result),
+            CompletionType::Truncate(t) => t.callback(result),
+        }
+        self.inner.result.set(Some(err)).expect("result must be set only once");
+    }
+
+    // Q. unreachable vs panic?
+    // panic is for unexpectd by possible error
+    // unreachable is for impossible code paths. Compiler can optimize based on this assumption
+    pub fn as_read(&self) -> &ReadCompletion {
+        match self.inner.completion_type {
+            CompletionType::Read(ref r) => r,
+            _ => unreachable!("this function must be called on ReadCompletion only")
+        }
+    }
+
+    pub fn as_write(&self) -> &WriteCompletion {
+        match self.inner.completion_type {
+            CompletionType::Write(ref w) => w,
+            _ => unreachable!("this function must be called on WriteCompletion only")
+        }
     }
 }
 

@@ -10,7 +10,14 @@ pub enum TursoMiniError {
     CompletionError(#[from] CompletionError),
 }
 
-#[derive(Error, Debug)]
+// Q. Copy vs Clone?
+// Clone is explicity method call: let y = x.clone()
+// It can be expensive: deep copy, heap allocation
+// Copy is implicit: let y = x
+// Must be cheap, stack only, no heap allocation
+#[derive(Error, Debug, Clone, Copy)]
+// CompletionError variablts contain simple types
+// Hence this is stored on the stack
 pub enum CompletionError {
     #[error("I/O error: {0}")]
     IOError(std::io::ErrorKind)

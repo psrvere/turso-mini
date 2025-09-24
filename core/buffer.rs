@@ -39,14 +39,8 @@ impl Buffer {
     }
 
     // Get a mutable slice reference to the buffer data
-    pub fn as_mut_slice(&mut self) -> &mut [u8] {
-        match self {
-            Self::Heap(buf) => {
-                unsafe {
-                    std::slice::from_raw_parts_mut(buf.as_mut_ptr(), buf.len())
-                }
-            }
-        }
+    pub fn as_mut_slice(&self) -> &mut [u8] {
+        unsafe {std::slice::from_raw_parts_mut(self.as_mut_ptr(), self.len())}
     }
 
     pub fn as_ptr(&self) -> *const u8 {
@@ -55,9 +49,9 @@ impl Buffer {
         }
     }
 
-    pub fn as_ptr_mut(&mut self) -> *mut u8 {
+    pub fn as_mut_ptr(&self) -> *mut u8 {
         match self {
-            Self::Heap(buf) => buf.as_mut_ptr()
+            Self::Heap(buf) => buf.as_ptr() as *mut u8,
         }
     }
 }
