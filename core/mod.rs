@@ -234,13 +234,6 @@ impl Completion {
             _ => unreachable!("this function must be called on ReadCompletion only")
         }
     }
-
-    pub fn as_write(&self) -> &WriteCompletion {
-        match self.inner.completion_type {
-            CompletionType::Write(ref w) => w,
-            _ => unreachable!("this function must be called on WriteCompletion only")
-        }
-    }
 }
 
 #[cfg(test)]

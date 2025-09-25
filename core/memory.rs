@@ -75,7 +75,6 @@ impl File for MemoryFile {
     }
 
     fn pwrite(&self, pos: u64, buffer: Arc<Buffer>, c: Completion) -> Result<Completion> {
-        let w = c.as_write();
         let buf_len = buffer.len();
         if buf_len == 0 {
             c.complete(0);
@@ -115,10 +114,6 @@ impl File for MemoryFile {
     }
 
     fn truncate(&self, len: u64, c: Completion) -> Result<Completion> {
-        if len < 0 {
-            c.complete(0);
-            return Ok(c)
-        }
         let file_size = self.size.get();
         if len < file_size {
             unsafe {
