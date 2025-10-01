@@ -1,6 +1,8 @@
-use std::{cell::{Cell, UnsafeCell}, collections::BTreeMap};
+use std::{cell::{Cell, UnsafeCell}, collections::{BTreeMap, HashMap}, sync::Mutex};
 use std::sync::Arc;
-use crate::{Completion, File, Result, Buffer};
+
+use crate::io::{clock::{Clock, Instant}, Buffer, Completion, File, OpenFlags, IO};
+use crate::Result;
 
 const PAGE_SIZE: usize = 4096;
 type MemPage = Box<[u8; PAGE_SIZE]>;
@@ -181,5 +183,52 @@ impl MemoryFile {
                 .entry(page_no)
                 .or_insert_with(|| Box::new([0; PAGE_SIZE]))
         }
+    }
+}
+
+// Outer Arc allows shared ownership of the entire file registry across multiple threads
+// Inner Arc allows shared ownership of individual files across multiple threads
+pub struct MemoryIO {
+    files: Arc<Mutex<HashMap<String, Arc<MemoryFile>>>>,
+}
+
+impl MemoryIO {
+    pub fn new() -> Self {
+        Self {
+            files: Arc::new(Mutex::new(HashMap::<String, Arc<MemoryFile>>::new()))
+        }
+    }
+}
+
+impl Default for MemoryIO {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Clock for MemoryIO {
+    fn now(&self) -> Instant {
+        let now = chrono::Local::now();
+        Instant { 
+            secs: now.timestamp(), 
+            micros: now.timestamp_subsec_micros() 
+        }
+    }
+}
+
+impl IO for MemoryIO {
+    fn open_file(&self, path: &str, flags: OpenFlags) -> Result<Arc<dyn File>> {
+        let mut files = self.files.lock().unwrap();
+        if !files.contains_key(path) {
+            files.insert(
+                path.to_string(),
+                Arc::new(MemoryFile{
+                    path: path.to_string(), 
+                    pages: BTreeMap::new().into(),
+                    size: 0.into(),
+                })
+            );
+        }
+        Ok(files.get(path).unwrap().clone())
     }
 }

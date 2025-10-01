@@ -8,6 +8,8 @@ pub enum TursoMiniError {
     FileLockingError(String),
     #[error("Completion error: {0}")]
     CompletionError(#[from] CompletionError),
+    #[error("Corrupt databse: {0}")]
+    Corrupt(String),
 }
 
 // Q. Copy vs Clone?

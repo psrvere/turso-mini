@@ -3,7 +3,7 @@ use clock::Clock;
 use error::TursoMiniError;
 use core::fmt;
 use std::sync::{Arc, OnceLock};
-use buffer::Buffer;
+pub use buffer::Buffer;
 use error::CompletionError;
 use std::fmt::Debug;
 
