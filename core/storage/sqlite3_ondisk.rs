@@ -1,6 +1,10 @@
 use std::{pin::Pin, sync::Arc};
 
-use crate::{io::{error::TursoMiniError, Buffer}, storage::btree::offset::{BTREE_FIRST_FREEBLOCK, BTREE_PAGE_TYPE, BTREE_RIGHTMOST_PTR}, Result};
+use crate::{io::{error::TursoMiniError, Buffer}, storage::btree::offset::{BTREE_CELL_CONTENT_AREA, BTREE_CELL_COUNT, BTREE_FIRST_FREEBLOCK, BTREE_FRAGMENTED_BYTES_COUNT, BTREE_PAGE_TYPE, BTREE_RIGHTMOST_PTR}, Result};
+
+pub const CELL_PTR_SIZE_BYTES: usize = 2;
+pub const INTERIOR_PAGE_HEADER_SIZE_BYTES: usize = 12;
+pub const LEAF_PAGE_HEADER_SIZE_BYTES: usize = 8;
 
 pub enum PageType {
     IndexInterior = 2,
@@ -134,6 +138,10 @@ impl PageContent {
         self.write_u16(BTREE_FIRST_FREEBLOCK, value);
     }
 
+    pub fn read_first_freeblock(&self) -> u16 {
+        self.read_u16(BTREE_FIRST_FREEBLOCK)
+    }
+
     /*
         Freeblocks store location of free blocks on the page and size of each free block
         Freeblocks information is stored in a 4 bytes
@@ -159,6 +167,49 @@ impl PageContent {
             self.read_u16_no_offset(offset as usize),
             self.read_u16_no_offset(offset as usize + 2)
         )
+    }
+
+    pub fn write_cell_count(&self, count: u16) {
+        self.write_u16(BTREE_CELL_COUNT, count);
+    }
+
+    pub fn read_cell_count(&self) -> u16 {
+        self.read_u16(BTREE_CELL_COUNT)
+    }
+
+    // zero value for this area is interpreted as 65,536
+    pub fn write_cell_content_area(&self, value: u16) {
+        self.write_u16(BTREE_CELL_CONTENT_AREA, value);
+    }
+ 
+    pub fn write_fragmented_bytes_count(&self, count: u8) {
+        self.write_u8(BTREE_FRAGMENTED_BYTES_COUNT, count);
+    }
+
+    pub fn header_size(&self) -> usize {
+        let is_interior = self.read_u8(BTREE_PAGE_TYPE) <= PageType::TableInterior as u8;
+        (is_interior as usize) * INTERIOR_PAGE_HEADER_SIZE_BYTES
+            + (!is_interior as usize) * LEAF_PAGE_HEADER_SIZE_BYTES
+    }
+
+    pub fn cell_pointer_array_offset_and_size(&self) -> (usize, usize) {
+        (
+            self.cell_pointer_array_offset(),
+            self.cell_pointer_array_size(),
+        )
+    }
+
+    pub fn cell_pointer_array_offset(&self) -> usize {
+        self.offset + self.header_size()
+    }
+
+    pub fn cell_pointer_array_size(&self) -> usize {
+        self.read_cell_count() as usize * CELL_PTR_SIZE_BYTES
+    }
+
+    pub fn uallocated_region_start(&self) -> usize {
+        let (cell_ptr_array_start, cell_ptr_array_size) = self.cell_pointer_array_offset_and_size();
+        cell_ptr_array_start + cell_ptr_array_size
     }
 }
 
