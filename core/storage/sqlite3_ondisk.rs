@@ -267,9 +267,50 @@ impl PageContent {
         self.read_cell_count() as usize * CELL_PTR_SIZE_BYTES
     }
 
-    pub fn uallocated_region_start(&self) -> usize {
+    pub fn unallocated_region_start(&self) -> usize {
         let (cell_ptr_array_start, cell_ptr_array_size) = self.cell_pointer_array_offset_and_size();
         cell_ptr_array_start + cell_ptr_array_size
+    }
+
+    pub fn unallocated_region_size(&self) -> usize {
+        self.cell_content_area() as usize - self.unallocated_region_start()
+    }
+
+    pub fn cell_content_area(&self) -> u32 {
+        let offset = self.read_u16(BTREE_CELL_CONTENT_AREA);
+        if offset == 0 {
+            PageSize::MAX
+        } else {
+            offset as u32
+        }
+    }
+
+    /// Total number of fragmented bytes in all the fragments
+    pub fn num_frag_free_bytes(&self) -> u8 {
+        self.read_u8(BTREE_FRAGMENTED_BYTES_COUNT)
+    }
+
+    /// Returns value of rightmost pointer i.e. page number (value) of right most key
+    pub fn rightmost_pointer(&self) -> Option<u32> {
+        match self.page_type() {
+            PageType::IndexInterior | PageType::TableInterior => Some(self.read_u32(BTREE_RIGHTMOST_PTR)),
+            PageType::IndexLeaf | PageType::TableLeaf => None,
+        }
+    }
+
+    /// Returns a pointer to the right most key
+    /// Since buffer allocation guarantees page is stored contiguously in physical memory
+    /// we can do valid pointer arithmetic
+    pub fn rightmost_pointer_raw(&self) -> Option<*mut u8> {
+        match self.page_type() {
+            PageType::IndexInterior | PageType::TableInterior => Some(unsafe{
+                self
+                    .as_ptr()
+                    .as_mut_ptr()
+                    .add(self.offset + BTREE_RIGHTMOST_PTR)
+            }),
+            PageType::IndexLeaf | PageType::TableLeaf => None,
+        }
     }
 }
 
