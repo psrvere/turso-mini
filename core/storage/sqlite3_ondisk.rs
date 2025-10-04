@@ -1,10 +1,70 @@
 use std::{pin::Pin, sync::Arc};
 
-use crate::{io::{error::TursoMiniError, Buffer}, storage::btree::offset::{BTREE_CELL_CONTENT_AREA, BTREE_CELL_COUNT, BTREE_FIRST_FREEBLOCK, BTREE_FRAGMENTED_BYTES_COUNT, BTREE_PAGE_TYPE, BTREE_RIGHTMOST_PTR}, Result};
+use crate::{bail_corrupt_error, error::TursoMiniError, io::Buffer, storage::btree::offset::{BTREE_CELL_CONTENT_AREA, BTREE_CELL_COUNT, BTREE_FIRST_FREEBLOCK, BTREE_FRAGMENTED_BYTES_COUNT, BTREE_PAGE_TYPE, BTREE_RIGHTMOST_PTR}, Result};
+use pack1::{U16BE};
 
 pub const CELL_PTR_SIZE_BYTES: usize = 2;
 pub const INTERIOR_PAGE_HEADER_SIZE_BYTES: usize = 12;
 pub const LEAF_PAGE_HEADER_SIZE_BYTES: usize = 8;
+
+pub struct PageSize(U16BE);
+
+impl PageSize {
+    pub const MIN: u32 = 512;
+    pub const MAX: u32 = 65536;
+    pub const DEFAULT: u16 = 4096;
+
+    // const functions are evaluated at compile time
+    // This fn has no heap allocation, no side effects, simple bit operations
+    // And hence is a suitable candidate for const fn
+    pub const fn new(size: u32) -> Option<Self> {
+        if size < PageSize::MIN || size > PageSize::MAX {
+            return None;
+        }
+
+        // Page size must be power of 2
+        if size.count_ones() != 1 {
+            return None;
+        }
+
+        if size == PageSize::MAX {
+            // Internally, the value of 1 represents 65536
+            // page size space is 2 bytes (u16) in DB header, which have max value of 65535
+            return Some(Self(U16BE::new(1)));
+        }
+
+        Some(Self(U16BE::new(size as u16)))
+    }
+
+    pub fn new_from_header_u16(value: u16) -> Result<Self> {
+        match value {
+            1 => Ok(Self(U16BE::new(1))),
+            n => {
+                let Some(size) = Self::new(n as u32) else {
+                    bail_corrupt_error!("invalid page size in database header: {n}")
+                };
+                Ok(size)
+            }
+        }
+    }
+
+    pub const fn get(self) -> u32 {
+        match self.0.get() {
+            1 => Self::MAX,
+            n => n as u32,
+        }
+    }
+
+    pub const fn get_raw(self) -> u16 {
+        self.0.get()
+    }
+}
+
+impl Default for PageSize {
+    fn default() -> Self {
+        Self(U16BE::new(Self::DEFAULT))
+    }
+}
 
 pub enum PageType {
     IndexInterior = 2,

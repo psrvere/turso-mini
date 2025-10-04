@@ -33,3 +33,10 @@ impl From<std::io::Error> for TursoMiniError {
         Self::CompletionError(CompletionError::IOError(value.kind()))
     }
 }
+
+#[macro_export]
+macro_rules! bail_corrupt_error {
+    ($($arg:tt)*) => {
+        return Err(TursoMiniError::Corrupt(format!($($arg)*)))
+    }
+}
