@@ -319,14 +319,14 @@ pub fn read_u32(buf: &[u8], pos: usize) -> u32 {
 }
 
 /*
-SQLite uses variant for rowids and keys in B-Trees
-variants use between 1 to 9 bytes to be more space efficient
+SQLite uses varint for rowids and keys in B-Trees
+varints use between 1 to 9 bytes to be more space efficient
 in each byte only lower 7 bits are used and the left most bit is used as a continuation flag
-if it's 0, this is the last byte and if it's 1, then there is at least one more higher byte to read
-variants are big endian i.e. in buffer the most significant byte is stored first
+if it's 0, this is the last byte and if it's 1, then there is at least one more lower byte to read
+varints are big endian i.e. in buffer the most significant byte is stored first
 
 Q. Why is Big Engian preferred in certain cases?
-A. It allows byte by byte coomparision, while comparing two variants, and the comparision can stop at 
+A. It allows byte by byte coomparision, while comparing two varints, and the comparision can stop at 
 first different byte found point i.e. there is no need to fully decode to compare
 
 Q. Why do we need 9 bytes to store 64 bit values?
@@ -335,8 +335,29 @@ Hence we need 8 more bits (56 + 8 = 64) to store 64 bits values. Needless to say
 for continuation flag.
 */
 
+/* From SQLite codebase comments:
+** The variable-length integer encoding is as follows:
+**
+** KEY:
+**         A = 0xxxxxxx    7 bits of data and one flag bit
+**         B = 1xxxxxxx    7 bits of data and one flag bit
+**         C = xxxxxxxx    8 bits of data
+**
+**  7 bits - A
+** 14 bits - BA
+** 21 bits - BBA
+** 28 bits - BBBA
+** 35 bits - BBBBA
+** 42 bits - BBBBBA
+** 49 bits - BBBBBBA
+** 56 bits - BBBBBBBA
+** 64 bits - BBBBBBBBC
+*/
+
 // write_variant returns size of variant in bytes
-pub fn write_variant(buf: &mut [u8], value: u64) -> usize {
+pub fn write_varint(buf: &mut [u8], value: u64) -> usize {
+    // Fast Paths for handling 1 and 2 bytes values were added as optimisations in SQLite codebase
+
     // Fast Path to handle 1 byte values: 0 to 127 (2^8-1)
     if value <= 0x7f {
         buf[0] = (value & 0x7f) as u8; // extract lower 7 bits, continuation flag (highest bit) is zero by default
@@ -350,13 +371,13 @@ pub fn write_variant(buf: &mut [u8], value: u64) -> usize {
         // u64 is copy type, so here these type of variables are copied, not moved
         buf[0] = (((value >> 7) & 0x7f) | 0x80) as u8; // extract higher 7 bits and mark continuation flag as 1 for this byte
         buf[1] = (value & 0x7f) as u8; // extract lower 7 bits, continuation flag (highest bit) is zero by default
-        return 2
+        return 2;
     }
 
     // Handle values which require all the 9 bytes
-    let mut value= value;
+    let mut value = value;
     if (value & (0xff000000 << 32)) > 0 {
-        buf[8] = value as u8; // set 9th byte
+        buf[8] = value as u8; // this will store least significant 8th bits a a full byte
         value >>= 8; // shift out these 8 bits
         for i in (0..8).rev() {
             buf[i] = ((value & 0x7f) | 0x80) as u8; // 
@@ -365,19 +386,41 @@ pub fn write_variant(buf: &mut [u8], value: u64) -> usize {
         return 9;
     }
 
-    // General path for all bytes
+    // General path for rest of the cases
     let mut encoded: [u8; 10] = [0; 10];
-    let mut bytes = value;
+    let mut bytes: u64 = value;
     let mut n = 0;
     while bytes != 0 {
         let v = 0x80 | (bytes & 0x7f); // extract 7 lower bits, and set highest bit to 1
-        encoded[n] = v as u8; // Note: byte are stored in little endian order
+        encoded[n] = v as u8; // Note: byte are stored in little endian order in encoded
         bytes >>= 7; // shift out these 7 bits
         n += 1;
     }
     encoded[0] &= 0x7f; // clear highest bit to 0 i.e. no more bytes after this
     for i in 0..n {
         buf[i] = encoded[n - 1 -i]; // copy values in buffer in big endian order
+    }
+    n
+}
+
+pub fn varint_len(value: u64) -> usize {
+    if value <= 0x7f {
+        return 1;
+    }
+
+    if value <= 0x3fff {
+        return 2;
+    }
+
+    if (value & (0xFF000000 << 32)) > 0 {
+        return 9;
+    }
+
+    let mut bytes = value;
+    let mut n = 0;
+    while bytes != 0 {
+        bytes >>= 7;
+        n += 1;
     }
     n
 }
