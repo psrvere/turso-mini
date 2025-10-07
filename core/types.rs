@@ -1,3 +1,44 @@
+use std::fmt::Display;
+
+// Following line adds conditional attribute to TextSubtype when serde feature is on
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum TextSubtype {
+    Text,
+    #[cfg(feature = "json")] // only compiled with json feature
+    Json,
+}
+
+pub struct Text {
+    pub value: Vec<u8>,
+    pub subtype: TextSubtype,
+}
+
+impl Text {
+    pub fn new(value: &str) -> Self {
+        Self {
+            value: value.as_bytes().to_vec(),
+            subtype: TextSubtype::Text,
+        }
+    }
+
+    #[cfg(feature = "json")]
+    pub fn json(value: String) -> Self {
+        Self {
+            value: value.into_bytes(),
+            subtype: TextSubtype::Json,
+        }
+    }
+
+    pub fn as_str(&self) -> &str {
+        unsafe { std::str::from_utf8_unchecked(self.value.as_ref())}
+    }
+}
+
+impl Display for Text {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.as_str())
+    }
+}
 /* Record Format:
 Documentation: https://sqlite.org/fileformat2.html#serialtype
 
