@@ -1,4 +1,21 @@
-// Documentation: https://sqlite.org/fileformat2.html#serialtype
+/* Record Format:
+Documentation: https://sqlite.org/fileformat2.html#serialtype
+
+A record in sqlite is how the database stores data in B-Trees
+A record is made of two parts - header and body
+Header store column type information in following format:
+
+┌────┬────┬────┬────┬────┬────┬────┬────┬────┬────
+│ HS │ S1 │ S2 │ S3 │ S4 │ ... │ SN │ V1 │ V2 │ ...
+└────┴────┴────┴────┴────┴────┴────┴────┴────┴────
+│<──── Header ──────────────>│<──── Body ────────>
+
+Where:
+HS = Header Size (varint, includes itself)
+S1 = Serial Type for column 1 (varint)
+S2 = Serial Type for column 2 (varint)
+S3 = Serial Type for column 3 (varint)
+*/
 pub struct SerialType(u64);
 
 pub enum SerialTypeKind {
