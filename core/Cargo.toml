@@ -8,8 +8,15 @@ license.workspace = true
 
 [lib]
 name = "turso_mini_core"
-path = "mod.rs"
+path = "lib.rs"
+
+[feature]
+json = []
+serde = ["dep:serde"]
 
 [dependencies]
 bitflags.workspace = true
+chrono = { version = "0.4.42", default-features = false, features = ["clock"] }
+pack1 = "1.0.0"
 thiserror = "2.0.16"
+serde = { workspace = true, optional = true, features = ["derive"]}
