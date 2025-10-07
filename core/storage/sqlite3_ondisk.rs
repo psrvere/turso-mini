@@ -424,3 +424,33 @@ pub fn varint_len(value: u64) -> usize {
     }
     n
 }
+
+// read_varint is provided with a slice (buffer) starting at the variant
+// the length of buffer may be longer than varint length
+// hence using buf.len() is not reliable
+// Moreover, the buffer can have additional data not related to varint
+// The most reliable way is to check for High Bit
+pub fn read_varint(buf: &[u8]) -> Result<(u64, usize)> {
+    let mut v: u64 = 0;
+    for i in 0..8 {
+        match buf.get(i) {
+            Some(c) => {
+                v = (v << 7) + (c & 0x7f) as u64;
+                if (c & 0x80) == 0 {
+                    return Ok((v, i + 1));
+                }
+            }
+            None => bail_corrupt_error!("Invalid varint")
+        }
+    }
+    match buf.get(8) {
+        Some(&c) => {
+            if (v >> 48) == 0 {
+                bail_corrupt_error!("Invalid varint");
+            }
+            v = (v << 8) + c as u64;
+            Ok((v, 9))
+        }
+        None => bail_corrupt_error!("invalid varint")
+    }
+}
